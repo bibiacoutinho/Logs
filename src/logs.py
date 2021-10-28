@@ -6,13 +6,14 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import backref 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+import json
 
 app = Flask(__name__)
 CORS(app)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:mariadb@localhost:3306/teste'
-engine = create_engine('mysql+mysqlconnector://root:mariadb@localhost:3306/teste')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root:mariadb@localhost:3306/calculadora'
+engine = create_engine('mysql+mysqlconnector://root:mariadb@localhost:3306/calculadora')
 
 db = SQLAlchemy(app)
 
@@ -32,38 +33,48 @@ class Log(db.Model):
     n2 = db.Column(db.String(1000))
     tipo_id = db.Column(db.Integer, db.ForeignKey('tipo.id'))
 
-@app.route('/logs', methods=['POST'])
+db.create_all()
+
+@app.route('/logs', methods=['POST', 'GET'])
 def index():
-    opr = request.form.get('opr')
-    n1 = request.form.get('n1')
-    n2 = request.form.get('n2')
-
-    with Session(engine) as session:
-        resultado_elementar = search('Elementar')
-
-        if not resultado_elementar:
-            elementar = Tipo(operacao='Elementar')
-            session.add(elementar)
-            session.commit()
+    if request.method == 'POST':
+        with Session(engine) as session:
+            opr = request.form.get('opr')
+            n1 = request.form.get('n1')
+            n2 = request.form.get('n2')
             resultado_elementar = search('Elementar')
-        
-        resultado_transcendental = search('Transcendental')
 
-        if not resultado_transcendental:
-            transcendental = Tipo(operacao='Transcendental')
-            session.add(transcendental)
-            session.commit()
+            if not resultado_elementar:
+                elementar = Tipo(operacao='Elementar')
+                session.add(elementar)
+                session.commit()
+                resultado_elementar = search('Elementar')
+            
             resultado_transcendental = search('Transcendental')
 
-        if opr == 'seno':
-            log = Log(n1=n1, operacao='seno', tipo_id=resultado_transcendental[0].id)
-        elif opr == 'soma':
-            log = Log(n1=n1, n2=n2, operacao='soma', tipo_id=resultado_elementar[0].id)
-        else:
-            log = Log(n1=n1, n2=n2, operacao='subt', tipo_id=resultado_elementar[0].id)
-        session.add(log)
-        session.commit()
-    return 
+            if not resultado_transcendental:
+                transcendental = Tipo(operacao='Transcendental')
+                session.add(transcendental)
+                session.commit()
+                resultado_transcendental = search('Transcendental')
+
+            if opr == 'seno':
+                n2 = 0
+                log = Log(n1=n1, n2=n2, operacao='seno', tipo_id=resultado_transcendental[0].id)
+            elif opr == 'soma':
+                log = Log(n1=n1, n2=n2, operacao='soma', tipo_id=resultado_elementar[0].id)
+            else:
+                log = Log(n1=n1, n2=n2, operacao='subt', tipo_id=resultado_elementar[0].id)
+            session.add(log)
+            session.commit()
+        return 'Log inserido.'
+    else:
+        with Session(engine) as session:
+            lista = []
+            for log in session.query(Log).join(Tipo, Tipo.id == Log.tipo_id).all():
+                lista.append({"n1":log.n1, "n2": log.n2, "operacao": log.operacao, "data":log.data.strftime("%d/%m/%Y"), "tipo": log.tipo.operacao})
+                print(json.dumps(lista))
+        return json.dumps(lista)
 
 def search(string):
     with Session(engine) as session:
@@ -72,7 +83,6 @@ def search(string):
         resultado = selected.scalars().all()
         return resultado
 
-db.create_all()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=5005)
