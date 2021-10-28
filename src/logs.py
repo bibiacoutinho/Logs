@@ -73,7 +73,6 @@ def index():
             lista = []
             for log in session.query(Log).join(Tipo, Tipo.id == Log.tipo_id).all():
                 lista.append({"n1":log.n1, "n2": log.n2, "operacao": log.operacao, "data":log.data.strftime("%d/%m/%Y"), "tipo": log.tipo.operacao})
-                print(json.dumps(lista))
         return json.dumps(lista)
 
 def search(string):
